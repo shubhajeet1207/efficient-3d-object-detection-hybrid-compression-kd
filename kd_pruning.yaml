@@ -1,0 +1,115 @@
+MODEL:
+    NAME: KDPruningDetector
+    
+    TEACHER_BACKBONE:
+        NAME: VoxelBackBone8x
+        NUM_FILTERS: [64, 128, 256]
+        WITH_BN: True
+        NUM_INPUT_FEATURES: 4
+        
+    TEACHER_HEAD:
+        NAME: AnchorHeadSingle
+        CLASS_AGNOSTIC: False
+        USE_DIRECTION_CLASSIFIER: True
+        NUM_DIR_BINS: 2
+        ANCHOR_GENERATOR_CONFIG:
+            CLASS_NAME: AnchorGeneratorRange
+            ANCHOR_RANGES: [[0, -39.68, -1.78, 69.12, 39.68, -1.78]]
+            ROTATED_ANCHORS: True
+            SIZES: [[3.9, 1.6, 1.56]]
+            CUSTOM_VALUES: []
+            MATCH_THRESH: 0.6
+            UNMATCHED_THRESH: 0.45
+            
+    STUDENT_BACKBONE:
+        NAME: VoxelBackBone8x
+        NUM_FILTERS: [32, 64, 128]  # Smaller than teacher
+        WITH_BN: True
+        NUM_INPUT_FEATURES: 4
+        
+    STUDENT_HEAD:
+        NAME: AnchorHeadSingle
+        CLASS_AGNOSTIC: False
+        USE_DIRECTION_CLASSIFIER: True
+        NUM_DIR_BINS: 2
+        ANCHOR_GENERATOR_CONFIG:
+            CLASS_NAME: AnchorGeneratorRange
+            ANCHOR_RANGES: [[0, -39.68, -1.78, 69.12, 39.68, -1.78]]
+            ROTATED_ANCHORS: True
+            SIZES: [[3.9, 1.6, 1.56]]
+            CUSTOM_VALUES: []
+            MATCH_THRESH: 0.6
+            UNMATCHED_THRESH: 0.45
+            
+    FEATURE_DISTILLATION:
+        PROJECTION_CHANNELS: 256
+        
+    LABEL_ASSIGNMENT:
+        IOU_THRESHOLD: 0.6
+        
+    KD:
+        TEMPERATURE: 1.0  # Temperature for soft target generation
+        
+    LOSS_WEIGHTS:
+        SUPERVISED_CLS: 1.0
+        SUPERVISED_REG: 2.0
+        FEAT_KD: 0.5
+        CLS_KD: 0.5
+        REG_KD: 1.0
+
+DATASET:
+    TYPE: KittiDataset
+    DATA_PATH: data/kitti
+    CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
+    
+    DATA_SPLIT:
+        train: train
+        test: val
+        
+    POINT_CLOUD_RANGE: [0, -39.68, -3, 69.12, 39.68, 1]
+    VOXEL_SIZE: [0.16, 0.16, 4]
+    
+    DATA_AUGMENTOR:
+        DISABLE_AUG_LIST: ['placeholder']
+        AUG_CONFIG_LIST:
+            - NAME: gt_sampling
+              USE_ROAD_PLANE: True
+              DB_INFO_PATH:
+                  - kitti_dbinfos_train.pkl
+              PREPARE: {
+                  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Cyclist:5'],
+                  filter_by_difficulty: [-1],
+              }
+              SAMPLE_GROUPS: ['Car:15', 'Pedestrian:10', 'Cyclist:10']
+              NUM_POINT_FEATURES: 4
+              DATABASE_WITH_FAKELIDAR: False
+              REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
+              LIMIT_WHOLE_SCENE: False
+              
+            - NAME: random_world_flip
+              ALONG_AXIS_LIST: ['x']
+              
+            - NAME: random_world_rotation
+              WORLD_ROT_ANGLE: [-0.78539816, 0.78539816]
+              
+            - NAME: random_world_scaling
+              WORLD_SCALE_RANGE: [0.95, 1.05]
+
+OPTIMIZATION:
+    BATCH_SIZE_PER_GPU: 2
+    NUM_EPOCHS: 80
+    OPTIMIZER: adam_onecycle
+    LR: 0.003
+    WEIGHT_DECAY: 0.01
+    MOMENTUM: 0.9
+    MOMS: [0.85, 0.85]
+    PCT_START: 0.4
+    DIV_FACTOR: 10
+    DECAY_STEP_LIST: [35, 45]
+    LR_DECAY: 0.1
+    LR_CLIP: 0.0000001
+
+    LR_WARMUP: False
+    WARMUP_EPOCH: 1
+
+    GRAD_NORM_CLIP: 10 
